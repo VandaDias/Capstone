@@ -1,0 +1,256 @@
+---
+title: "Exploratory Analysis for a Predictive Text Model"
+subtitle: "Milestone Report - Capstone"
+author: "Vanda Dias"
+date: "1 August 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+##Synopsis
+
+This document reports an exploratory analysis on text data, where these text data aims to serve as the basis of a predictive text model - predicting the next word of a given set of sequential words.
+
+The analysis, which is undertaken in R mainly through Natural Language Process (NLP) packages, explores the main characteristics of the text documents provided, such as number of lines and characters and most frequent words or combinations of words.
+
+
+##Introduction
+
+This report is part of the Capstone Project for the Data Science Specialization by the Johns Hopkins University which consists on creating an interactive tool to predict the next word of a given short sequence of words, like when people use smart keyboards to type on their mobile devices.
+
+This first report aims to demonstrate that the data provided by SwiftKey (corporate partner of the capstone) has been accessed, explored and is ready to be the basis of a predictive text model.
+
+
+It is organised as followed:
+
+- **R Libraries:** displays the R packages used in the exploratory analysis;
+
+- **Dataset:** presents the data and how were them accessed;
+
+- **Summary Statistics:** presents the main characteristics of the data. **Lines and Characters** compares the most simple characteristics of the different documents and **Words Frequency** analyses the most frequent words and combination of words;
+
+- **Interesting Findings:** summary of the main findings resulting from the exploratory analysis that hel to build the model;
+
+- **Predictive Algorythm:** presents a plan/ideas for the next steps, creating a prediction algorithm and app.
+
+
+##R Libraries
+
+The report's analysis was developed in R and a few extra libraries/packages than the basic ones were needed:
+
+```{r libraries, message=FALSE}
+library(knitr)
+library(quanteda)
+library(reshape)
+library(ggplot2)
+```
+
+"knitr" was used to support the report formatting, "quanteda" was used to analyse the word frequency (it seems to be much faster than the "tm" package), "reshape" helped on rearranging the format of data frames and, "ggplot2" to build the plots.
+
+
+##Dataset
+
+The SwiftKey data was provided through the following link:
+https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip
+
+The zip folder was downloaded and saved in the project directory through the following commands. It was necessary to open (and close) a connection to access the data.
+
+```{r dataset}
+#download from zip folder
+zip_link <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+if(!file.exists("SwiftKey.zip")){
+  download.file(zip_link, "SwiftKey.zip")
+  unzip("SwiftKey.zip")
+}
+
+#open connections to the files
+connection_en_US_twitter <- file("final/en_US/en_US.twitter.txt")
+connection_en_US_blogs <- file("final/en_US/en_US.blogs.txt")
+connection_en_US_news <- file("final/en_US/en_US.news.txt")
+
+#retrieve text files data
+data_en_US_twitter <- readLines(connection_en_US_twitter, skipNul = TRUE)
+data_en_US_blogs <- readLines(connection_en_US_blogs, skipNul = TRUE)
+data_en_US_news <- readLines(connection_en_US_news, skipNul = TRUE)
+
+#close connections
+close(connection_en_US_twitter)
+close(connection_en_US_blogs)
+close(connection_en_US_news)
+```
+
+The SwiftKey folder included documents in many languages. However, only the text files in English (*final/en_US*) are included in this report's analysis. They consist in 3 documents from different text sources:
+
+- en_US.twitter.txt (twitter)
+
+- en_US.blogs.txt (blogs)
+
+- en_US.news.txt (news)
+
+
+##Summary Statistics
+
+The exploratory analysis is presented individually for each type of document. First are presented the main characteristics of the files as number of lines, characters and size. Followed by a more incisive analysis on the frequency and relationship of words.
+
+
+###Lines and Characters
+
+The following commands output the number of lines, characters, maximum number of characters per line and size (in bites) of each document. The code chunk ends printing a table with these main characteristics.
+
+```{r linesandcharacteres}
+#counts number of lines
+lines_en_US_twitter <- length(data_en_US_twitter)
+lines_en_US_blogs <- length(data_en_US_blogs)
+lines_en_US_news <- length(data_en_US_news)
+
+#sums number of characters
+char_en_US_twitter <- sum(nchar(data_en_US_twitter))
+char_en_US_blogs <- sum(nchar(data_en_US_blogs))
+char_en_US_news <- sum(nchar(data_en_US_news))
+
+#maximum number of characteres per line
+maxchar_en_US_twitter <- max(nchar(data_en_US_twitter))
+maxchar_en_US_blogs <- max(nchar(data_en_US_blogs))
+maxchar_en_US_news <- max(nchar(data_en_US_news))
+
+#files' size
+size_en_US_twitter <- object.size(data_en_US_twitter)
+size_en_US_blogs <- object.size(data_en_US_blogs)
+size_en_US_news <- object.size(data_en_US_news)
+
+#creates table
+sumstatistics <- data.frame(Lines=c(lines_en_US_twitter, lines_en_US_blogs, lines_en_US_news), NCharacteres=c(char_en_US_twitter,char_en_US_blogs, char_en_US_news), MaxNCharacteresPerLine=c(maxchar_en_US_twitter, maxchar_en_US_blogs, maxchar_en_US_news), ObjectSize_in_b=c(size_en_US_twitter, size_en_US_blogs, size_en_US_news), row.names = c("en_US.twitter", "en_US.blogs", "en_US.news"))
+kable(sumstatistics, caption = "Statistics on Lines and Characteres")
+```
+
+The above table shows that all files are very large in size.
+
+The *twitter* file is the largest one in size probably because it has the largest number of lines, over 2 million lines. It should be mentioned that twitter only allows typing up to 140 characters per post what justifies the maximum number of characters per line to be significantly lower when compared to the *blogs* or *news* documents.
+
+Text data in the *blogs* and *news* files have approximately the same characteristics in number of lines and characters.
+
+
+###Words Frequency
+
+The analysis on word frequency is the first step to build the predictive text model. It is based on a n-gram process, a type of probabilistic language model for predicting the next item, in this case *words*.
+
+Three types of combinations have been considered: unigram (n = 1 word), bigram (n = 2 sequential words) and trigram (n = 3 sequential words). For each has been presented a graph of the most frequent words or combination of words existent in the 3 types of documents.
+
+As the size of the text data in the documents is too large, this exploratory analysis has been based on a sample from the documents. In this case half of the lines randomly selected by a binomial expression (a *set.seed* as been applied for reproducibility).
+
+When creating a document-feature matrix, the command incorporates a cleaning process of lowering case the documents' characters and removing: numbers, punctuation, symbols and twitter specific symbols.
+
+```{r sampling}
+n <- 0.50
+set.seed(2017)
+sample_en_US_twitter <- data_en_US_twitter[rbinom(lines_en_US_twitter*n, lines_en_US_twitter, 0.5)]
+singlesample_en_US_twitter <- paste(sample_en_US_twitter, collapse = " ")
+set.seed(2017)
+sample_en_US_blogs <- data_en_US_blogs[rbinom(lines_en_US_blogs*n, lines_en_US_blogs, 0.5)]
+singlesample_en_US_blogs <- paste(sample_en_US_blogs, collapse = " ")
+set.seed(2017)
+sample_en_US_news <- data_en_US_news[rbinom(lines_en_US_news*n, lines_en_US_news, 0.5)]
+singlesample_en_US_news <- paste(sample_en_US_news, collapse = " ")
+join_samples_en_US <- c(singlesample_en_US_twitter, singlesample_en_US_blogs, singlesample_en_US_news)
+```
+
+```{r documentfeaturematrix}
+unigram <- dfm(join_samples_en_US, what="word", tolower=TRUE, remove_numbers=TRUE, remove_punct=TRUE, remove_symbols=TRUE, remove_twitter=TRUE, ngrams=1, concatenator=" ")
+bigram <- dfm(join_samples_en_US, what="word", tolower=TRUE, remove_numbers=TRUE, remove_punct=TRUE, remove_symbols=TRUE, remove_twitter=TRUE, ngrams=2, concatenator=" ")
+trigram <- dfm(join_samples_en_US, what="word", tolower=TRUE, remove_numbers=TRUE, remove_punct=TRUE, remove_symbols=TRUE, remove_twitter=TRUE, ngrams=3, concatenator=" ")
+```
+
+The following chunk codes show the code to create the list of the most frequent words or combination of words for each n-gram option. All of them result in a graphic plot of the most frequent terms - this subset considers the top 20 terms in total, not by document.
+
+
+**Unigram**
+
+```{r unigram}
+unigram_df <- as.data.frame(t(unigram))
+names(unigram_df) <- c("en_US.twitter", "en_US.blogs", "en_US.news")
+unigram_df <- cbind(unigram_df, all=rowSums(unigram_df), term=row.names(unigram_df))
+unigram_df <- unigram_df[order(-unigram_df$all),]
+unigram_df_20 <- within(head(unigram_df, 20), rm(all))
+unigram_df_20 <- melt(unigram_df_20, id=c("term"))
+g_unigram <- ggplot(data = unigram_df_20, aes(x=reorder(term, value), y=value, fill=variable))
+g_unigram + geom_bar(stat = "identity") + coord_flip() + scale_fill_brewer(palette = "Paired") + labs(y="Word Frequency", x="Words", title="Most frequent words", fill="document")
+```
+
+When analysing the text data by word it results the most frequent words are *stopwords*. "the" in particular is much more frequent than all the other words, followed by "to", "a" and "and".
+
+Certain words like "I", "you" and "my", i.e. personal words, do not seem to be so frequent in the *twitter* document. In opposition, they get more importance in *blogs*.
+
+
+**Bigram**
+
+```{r bigram}
+bigram_df <- as.data.frame(t(bigram))
+names(bigram_df) <- c("en_US.twitter", "en_US.blogs", "en_US.news")
+bigram_df <- cbind(bigram_df, all=rowSums(bigram_df), term=row.names(bigram_df))
+bigram_df <- bigram_df[order(-bigram_df$all),]
+bigram_df_20 <- within(head(bigram_df, 20), rm(all))
+bigram_df_20 <- melt(bigram_df_20, id=c("term"))
+g_bigram <- ggplot(data = bigram_df_20, aes(x=reorder(term, value), y=value, fill=variable))
+g_bigram + geom_bar(stat = "identity") + coord_flip() + scale_fill_brewer(palette = "Paired") + labs(y="Two Words Frequency", x="Two Words", title="Most frequent two words", fill="document")
+```
+
+The analysis on two-word combinations results that the most frequent relationship is with the word "the". In the ten most frequent terms seven are combined with the word "the".
+
+Interesting is the fact that in this case as well most of the top combinations are combinations of stop-words.
+
+
+**Trigram**
+
+```{r trigram}
+trigram_df <- as.data.frame(t(trigram))
+names(trigram_df) <- c("en_US.twitter", "en_US.blogs", "en_US.news")
+trigram_df <- cbind(trigram_df, all=rowSums(trigram_df), term=row.names(trigram_df))
+trigram_df <- trigram_df[order(-trigram_df$all),]
+trigram_df_20 <- within(head(trigram_df, 20), rm(all))
+trigram_df_20 <- melt(trigram_df_20, id=c("term"))
+g_trigram <- ggplot(data = trigram_df_20, aes(x=reorder(term, value), y=value, fill=variable))
+g_trigram + geom_bar(stat = "identity") + coord_flip() + scale_fill_brewer(palette = "Paired") + labs(y="Three Words Frequency", x="Three Words", title="Most frequent three words", fill="document")
+```
+
+In this case not only stop-words are part of the most frequent terms, mainly there is a combination of stop-words with regular words.
+
+The main three word sequences are "a lot of", "thanks for the" and "one of the".
+
+Many sequence of three words do not have relevance in the *news* document such as "thanks for the", "looking forward to" or "I love you". And on the contrary, these are quite frequent in the *twitter* text data. 
+
+
+##Interesting Findings
+
+The most interesting findings from the exploratory analysis that will help built the predictive model are:
+
+**The predictive model must be based on a sample**
+
+The text documents provided are quite large in size and involve high processing times difficult to run in regular computers. For this reason it is necessary to construct the model on a sample of the whole data, small enough for the predictive model to run efficiently but large enough to be representative.
+
+**Important to construct a model based on type of text**
+
+There is a significant difference between word combinations in the three types of text data. *twitter* and *blogs* text data use more personal words than *news* text data where they almost do not exist. Greeting words are predominantly present in *twitter*.
+
+**Stopwords should not be removed from the model**
+
+When analysing single words the most frequent ones are stop words and the same occurs when the combination of two words. In three sequential words, stop-words form part of them. As they are always present and have a strong presence, they are important to construct sequential text and should not be removed from the model.
+
+
+##Predictive Algorythm Plan
+
+The predictive text model is intended to result in a model that predicts the following word for a given sequence of words. At the moment the plan is to restrict the number of given words between one and two, which means, predict the second or third word. However, if finding a more efficient running process, the number of sequential words may be expanded.
+
+Regardless the number of words, the next steps are:
+
+- create a list/dictionary with the word combination for each n-gram option,
+
+- given a single word or word combination, count the number of words given and choose the list/dictionary for the n+1-gram option,
+
+- create a vector that looks up the given combination of words in the list (as the first sequential words of a n+1 sequence) and outputs the 3 most frequent combinations.
+
+
+Besides is needed a deeper understanding of what to do with unseen n-gram words.
